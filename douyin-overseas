@@ -1,0 +1,96 @@
+import scrapy
+from Scrapypro.items import AppVideoItem
+import json
+import time
+from Scrapypro.utils import db_utils, string_utils
+
+
+class DouyinOverseasSpider(scrapy.Spider):
+    table_name = 'douyin_overseas'  
+    custom_settings = {
+        'ITEM_PIPELINES': {'news_second.pipelines.NewsPipeline': 300},
+    }
+    name = 'douyin_overseas'  # 抖音海外版APP
+
+    def __init__(self, days=None, kw=None, *args, **kwargs):
+        self.days = int(days) if (days is not None) else 0  # 设置爬取天数
+        print('抓取前 %s 天' % self.days)
+        self.headers = {
+            "host": "api2-16-h2.musical.ly",
+            "connection": "keep-alive",
+            "cookie": "odin_tt=596be2febf0d15fd623fabccfd2aac392754828903f00456b4affebdcaf4be2b68d27012822f70f5fb8618c6f89e08c9959f5b246d368640e42aedcd2e3994ac; install_id=6685529000750073606; ttreq=1$5e204b6df08a4b5966b936b2511107b250b073e2",
+            "accept-encoding": "gzip",
+            "sdk-version": "1",
+            "user-agent": "com.zhiliaoapp.musically/2099021519 (linuX; U; android 6.0; ZH_CN; HUAWEI VNS-AL00; buiLD/HUAWEIVNS-AL00; cronet/58.0.2991.0)",
+        }
+
+    def start_requests(self):
+        # 抖音推荐板块
+        tuijian_url = 'https://api2-16-h2.musical.ly/aweme/v1/feed/?type=0&max_cursor=0&min_cursor=0&count=6&volume=0.0&pull_type=1&req_from&ad_user_agent=Dalvik%2F2.1.0+%28Linux%3B+U%3B+Android+6.0%3B+HUAWEI+VNS-AL00+Build%2FHUAWEIVNS-AL00%29&filter_warn=0&bid_ad_params=H4sIAAAAAAAAAKtWSkyJz8xLy48vLcjJT0xRsoquVirISUxOzU3NK4kvqSxIVbJSMjQwMDQ0NjBU%0Aqo2tBQAIB%2BASMgAAAA%3D%3D%0A&android_id=292204f62c6e8c86&ad_personality_mode=1&js_sdk_version=&app_type=normal&os_api=23&device_type=HUAWEI%20VNS-AL00&ssmix=a&manifest_version_code=2099021519&dpi=480&carrier_region=KR&region=US&carrier_region_v2=&app_name=musical_ly&version_name=10.1.0&ab_version=10.1.0&timezone_offset=28800&pass-route=1&pass-region=1&is_my_cn=0&fp=&ac=wifi&update_version_code=2099021519&channel=googleplay&_rticket=1557287463188&device_platform=android&iid=6685529000750073606&build_number=10.1.0&version_code=100100&timezone_name=Asia%2FShanghai&openudid=292204f62c6e8c86&device_id=6685527971144746501&sys_region=CN&app_language=en&resolution=1080*1812&os_version=6.0&device_brand=HUAWEI&language=zh&aid=1233&mcc_mnc=&as=a165355da602ac82d24188&cp=5125cb536d2bd42de1auOy&mas=011c215a2182482b92a0012ba0acce88161c1c8c2c4c264c1cc686'
+        yield scrapy.FormRequest(tuijian_url, callback=self.parse, headers=self.headers)
+
+        # 账号搜索
+        account_list = ['央视新闻', '人民日报', '人民网']  # 需要爬取的主页可以添加到list中
+        for account in account_list:
+            search_headers = {
+                "host": "api2-19-h2.musical.ly",
+                "connection": "keep-alive",
+                "cookie": "odin_tt=27305070e92b2e165d553122f2ccaf09bee2cdf4f97af74d41e895854e6184b46810707cb7b7526a7a4bbb097a9ea0fbaefb1366291a7004d1e1e5fdeeeb2c07; sid_guard=2a616ecdfbdba1deb93f87c0fa505004%7C1557312027%7C5184000%7cSuN%2C+07-Jul-2019+10%3A40%3A27+GMt; uid_tt=f03f37763fde059dae3bb57675827ce1b74e8f08ae510521719d936eb3833f78; sid_tt=2a616ecdfbdba1deb93f87c0fa505004; sessionid=2a616ecdfbdba1deb93f87c0fa505004",
+                "accept-encoding": "gzip",
+                "X-tt-token": "032a616ecdfbdba1deb93f87c0fa505004be94095cb56bb1fa0fe29f24ade3bf06dcbaa6cca5d601fb6f86545032ea9af09",
+                "sdk-version": "1",
+                "user-agent": "com.zhiliaoapp.musically/2099021519 (linuX; U; android 6.0; ZH_CN; HUAWEI VNS-AL00; buiLD/HUAWEIVNS-AL00; cronet/58.0.2991.0)",
+            }
+            search_url = 'https://api2-19-h2.musical.ly/aweme/v1/discover/search/?cursor=0&keyword={}&count=10&type=1&is_pull_refresh=0&hot_search=0&search_source&ts=1557312040&js_sdk_version=&app_type=normal&os_api=23&device_type=HUAWEI%20VNS-AL00&ssmix=a&manifest_version_code=2099021519&dpi=480&carrier_region=KR&region=US&carrier_region_v2=&app_name=musical_ly&version_name=10.1.0&ab_version=10.1.0&timezone_offset=28800&pass-route=1&pass-region=1&is_my_cn=0&fp=&ac=wifi&update_version_code=2099021519&channel=googleplay&_rticket=1557312041818&device_platform=android&iid=6685529000750073606&build_number=10.1.0&version_code=100100&timezone_name=Asia%2FShanghai&openudid=292204f62c6e8c86&device_id=6685527971144746501&sys_region=CN&app_language=en&resolution=1080*1812&os_version=6.0&device_brand=HUAWEI&language=zh&aid=1233&mcc_mnc=&as=a1352bad48022c32024755&cp=b42ec0528822d92ae1Wu_y&mas=01b9d721fdedd9ae2d33c6cf91bc1ead33acacec2c4c0c4cccc64c'.format(account)
+            yield scrapy.FormRequest(search_url, callback=self.search_parse, headers=search_headers, meta={'account': account})
+
+    def parse(self, response):
+        print(response.status)
+        # print(response.text)
+        response_json = json.loads(response.text)
+        aweme_list = response_json['aweme_list']
+        for aweme in aweme_list:
+            aweme_id = aweme['aweme_id']
+            desc = aweme['desc']
+            create_time = aweme['create_time']
+            pubtime = string_utils.get_timeStamp_to_dateTime(create_time)
+            author_uid = aweme['author']['uid']
+            author_name = aweme['author']['nickname']
+            video_url = aweme['video']['play_addr']['url_list'][0]
+            comment_count = aweme['statistics']['comment_count']
+            digg_count = aweme['statistics']['digg_count']
+            share_count = aweme['statistics']['share_count']
+            if string_utils.compare_time(pubtime[:10], self.days):
+                item = AppVideoItem()
+                item['id'] = aweme_id
+                item['title'] = desc
+                item['pubtime'] = pubtime
+                item['author_uid'] = author_uid
+                item['author_name'] = author_name
+                item['video_url'] = video_url
+                item['comment_count'] = comment_count
+                item['digg_count'] = digg_count
+                item['share_count'] = share_count
+                item['crawl_time'] = int(time.time())
+                if comment_count > 0:
+                    comment_url = 'https://api2-19-h2.musical.ly/aweme/v1/comment/list/?aweme_id={}&cursor=0&count=20&comment_style=2&digged_cid&insert_cids&js_sdk_version=&app_type=normal&os_api=23&device_type=HUAWEI%20VNS-AL00&ssmix=a&manifest_version_code=2099021519&dpi=480&carrier_region=KR&region=US&carrier_region_v2=&app_name=musical_ly&version_name=10.1.0&ab_version=10.1.0&timezone_offset=28800&pass-route=1&pass-region=1&is_my_cn=0&fp=&ac=wifi&update_version_code=2099021519&channel=googleplay&_rticket=1557298165525&device_platform=android&iid=6685529000750073606&build_number=10.1.0&version_code=100100&timezone_name=Asia%2FShanghai&openudid=292204f62c6e8c86&device_id=6685527971144746501&sys_region=CN&app_language=en&resolution=1080*1812&os_version=6.0&device_brand=HUAWEI&language=zh&aid=1233&mcc_mnc=&as=a1c5d7bd647ffc7bb24999&cp=72f4c3544822d6bbe1[uIy&mas=01449d28ae6d99ef9148c2b70126bf63f99c9c9c2c4c4646ecc666'.format(aweme_id)
+                    yield scrapy.Request(comment_url, callback=self.comment_parse, meta=item)
+                else:
+                    yield item
+
+    def comment_parse(self, response):
+        comment_json = json.loads(response.text)['comments']
+        item = response.meta
+        item['comment_json'] = comment_json
+        yield item
+
+    def search_parse(self, response):
+        # print(response.text)
+        account = response.meta['account']
+        for user in json.loads(response.text)['user_list']:
+            nickname = user['user_info']['nickname']
+            uid = user['user_info']['uid']
+            if nickname == account:
+                user_homepage_url = 'https://api2-19-h2.musical.ly/aweme/v1/aweme/post/?max_cursor=0&user_id={}&count=20&retry_type=no_retry&mcc_mnc=&app_language=en&language=zh&region=US&sys_region=CN&carrier_region=KR&carrier_region_v2=&build_number=10.1.0&timezone_offset=28800&timezone_name=Asia%2FShanghai&is_my_cn=0&fp=&pass-region=1&pass-route=1&iid=6685529000750073606&device_id=6685527971144746501&ac=wifi&channel=googleplay&aid=1233&app_name=musical_ly&version_code=100100&version_name=10.1.0&device_platform=android&ab_version=10.1.0&ssmix=a&device_type=HUAWEI+VNS-AL00&device_brand=HUAWEI&os_api=23&os_version=6.0&openudid=292204f62c6e8c86&manifest_version_code=2099021519&resolution=1080*1812&dpi=480&update_version_code=2099021519&_rticket=1557313934860&ts=1557313934&as=a1c5eb4d9e686cf9122800&cp=bd8acf57ec2ed096e1_yMc&mas=01d7cf441d93005fd7eaa948910601174a0c0c1c4c4c8c9c66c66c'.format(uid)
+                yield scrapy.Request(user_homepage_url, callback=self.parse, headers=self.headers)
+
