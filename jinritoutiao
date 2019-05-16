@@ -1,0 +1,202 @@
+import scrapy
+import json
+from scrapy.selector import Selector
+from Scrapypro.items import AppNewsItem
+import time
+import pandas as pd
+from Scrapypro.utils import db_utils, string_utils
+
+
+class AppToutiaoSpider(scrapy.Spider):
+    table_name = 'app_toutiao'  
+    custom_settings = {
+        'ITEM_PIPELINES': {'news_second.pipelines.NewsPipeline': 300},
+    }
+    name = 'app_toutiao' 
+
+    def __init__(self, days=None, *args, **kwargs):
+        self.days = int(days) if (days is not None) else 0  # 设置爬取天数
+        print('抓取前 %s 天' % self.days)
+
+    def start_requests(self):
+        headers = {
+            "host": "is.snssdk.com",
+            "connection": "keep-alive",
+            "cookie": "odin_tt=69337547584d633644575059767a6457e1b496b6126c8ca8525dd4c9578ffaec30fdfafb7d6e608b95b3c5c7c17130262eba28d2450ad7242328f28579a70809; install_id=69437426592; ttreq=1$f43f64ce24ac391a835c27eeb3c80c9b4e61b325; qh[360]=1",
+            "accept-encoding": "gzip",
+            "X-SS-REQ-TICKET": "1555511458605",
+            "sdk-version": "1",
+            "user-agent": "com.ss.android.article.news/721 (linuX; U; android 6.0; ZH_CN; HUAWEI VNS-AL00; buiLD/HUAWEIVNS-AL00; cronet/58.0.2991.0)",
+            "X-gorgon": "03ebe0b68000422fd07836c47dc03e78bb88d3a229790511e3b2",
+            "X-khronos": "1555511458",
+            "X-pods": "",
+        }
+        # 热点
+        redian_url = 'http://is.snssdk.com/api/news/feed/v88/?list_count=35&support_rn=4&category=news_hot&refer=1&refresh_reason=1&session_refresh_idx=6&count=20&min_behot_time=1555510835&last_refresh_sub_entrance_interval=1555511129&loc_mode=7&loc_time=1555510922&latitude=39.915603072482895&longitude=116.70033575535275&city=%E5%8C%97%E4%BA%AC%E5%B8%82&tt_from=pull&lac=4265&cid=9530&plugin_enable=3&app_extra_params=%7B%22playparam%22%3A%22codec_type%3A1%22%7D&sati_extra_params=%7B%22last_click_item_list%22%3A%5B6680861247941902856%5D%7D&iid=69437426592&device_id=67279979471&ac=wifi&channel=huawei&aid=13&app_name=news_article&version_code=721&version_name=7.2.1&device_platform=android&ab_version=812271%2C717952%2C828943%2C812396%2C833138%2C796691%2C668774%2C766806%2C833238%2C837324%2C839168%2C773349%2C721869%2C775311%2C741713%2C765197%2C808169%2C612374%2C549647%2C839513%2C819664%2C615291%2C546700%2C798354%2C757284%2C757488%2C798159%2C782137%2C679100%2C735201%2C767991%2C779958%2C798121%2C799341%2C660830%2C825059%2C793920%2C830856%2C754087%2C770570%2C662176%2C475405%2C772642%2C665175%2C674056%2C770489%2C691933%2C170988%2C643890%2C398175%2C374117%2C671753%2C718154%2C674788%2C550042%2C435215%2C800002%2C649429%2C614098%2C677128%2C522765%2C416055%2C710077%2C801968%2C707372%2C785815%2C603441%2C789028%2C789246%2C822925%2C800208%2C783645%2C603387%2C603399%2C603404%2C603406%2C819029%2C833900%2C844799%2C799524%2C661907%2C831094%2C668775%2C832706%2C737593%2C802345%2C787542%2C788012%2C795195%2C729159%2C792681%2C607361%2C739592%2C844183%2C739390%2C764921%2C662099%2C759653%2C661781%2C457481%2C649403%2C815116&ab_group=100167%2C94564%2C102749%2C181430&ab_feature=102749%2C94564&ssmix=a&device_type=HUAWEI+VNS-AL00&device_brand=HUAWEI&language=zh&os_api=23&os_version=6.0&uuid=869315025703184&openudid=292204f62c6e8c86&manifest_version_code=721&resolution=1080*1812&dpi=480&update_version_code=72112&_rticket=1555511129828&fp=PSTrcrTZPMFbFlcOJlU1FzmILr4q&tma_jssdk_version=1.14.5.32&pos=5r_-9Onkv6e_eBEKeScxeCUfv7G_8fLz-vTp6Pn4v6esrKuzqq2trq6oqqiorqivqqixv_H86fTp6Pn4v6eupLOkrKirra6tqq-ppa-lpKixv_zw_O3e9Onkv6e_eBEKeScxeCUfv7G__PD87dHy8_r06ej5-L-nrKyrs6ukrqqlpLG__PD87dH86fTp6Pn4v6eupLOkrK2trarg&rom_version=emotionui_4.1.2_vns-al00c00b203&plugin=26958&ts=1555511129&as=a28593bb89c54c47472222&mas=0004480003e5af71cc2d28696f068f9f2026ea268a808080a8&cp=54c0b27e38759q1'
+        yield scrapy.Request(redian_url, headers=headers, callback=self.parse)
+        # 推荐
+        tuijian_tul = 'https://is.snssdk.com/api/news/feed/v88/?list_count=10&support_rn=4&refer=1&refresh_reason=5&session_refresh_idx=1&count=20&min_behot_time=1555422795&last_refresh_sub_entrance_interval=1555483566&loc_mode=7&loc_time=1555429494&latitude=39.91564590249036&longitude=116.70033870862096&city=%E5%8C%97%E4%BA%AC%E5%B8%82&tt_from=enter_auto&lac=4433&cid=62180&plugin_enable=3&app_extra_params=%7B%22playparam%22%3A%22codec_type%3A1%22%7D&st_time=12&sati_extra_params=%7B%22last_click_item_list%22%3A%5B%5D%7D&iid=69437426592&device_id=67279979471&ac=wifi&channel=huawei&aid=13&app_name=news_article&version_code=721&version_name=7.2.1&device_platform=android&ab_version=830856%2C754087%2C770570%2C662176%2C475405%2C772642%2C665175%2C674056%2C770489%2C691933%2C170988%2C643890%2C398175%2C374117%2C671753%2C718154%2C674788%2C550042%2C435215%2C800002%2C649429%2C614098%2C677128%2C522765%2C416055%2C710077%2C801968%2C707372%2C603441%2C789246%2C800950%2C822925%2C800208%2C783645%2C603387%2C603399%2C603404%2C603406%2C819029%2C833900%2C791017%2C799524%2C661907%2C831094%2C668775%2C832706%2C737593%2C802345%2C787542%2C788012%2C795195%2C729159%2C792681%2C607361%2C739592%2C739390%2C764921%2C662099%2C812271%2C717952%2C828943%2C812396%2C833138%2C796691%2C668774%2C766806%2C833238%2C822673%2C837324%2C839168%2C773349%2C721869%2C775311%2C741713%2C554836%2C765197%2C612374%2C549647%2C839513%2C819664%2C615291%2C546700%2C798354%2C757284%2C757488%2C798159%2C782137%2C679100%2C735201%2C767991%2C779958%2C798121%2C799341%2C660830%2C825059%2C793920%2C759653%2C661781%2C457481%2C649403%2C815116&ab_group=100167%2C94564%2C102749%2C181430&ab_feature=102749%2C94564&ssmix=a&device_type=HUAWEI+VNS-AL00&device_brand=HUAWEI&language=zh&os_api=23&os_version=6.0&uuid=869315025703184&openudid=292204f62c6e8c86&manifest_version_code=721&resolution=1080*1812&dpi=480&update_version_code=72112&_rticket=1555483566662&fp=PSTrcrTZPMFbFlcOJlU1FzmILr4q&tma_jssdk_version=1.14.5.32&pos=5r_-9Onkv6e_eBEKeScxeCUfv7G_8fLz-vTp6Pn4v6esrKuzqq2trq6lqq2lq6-tpKuxv_H86fTp6Pn4v6eupLOkrKirqaikra-ppK2uq7G__PD87d706eS_p794EQp5JzF4JR-_sb_88Pzt0fLz-vTp6Pn4v6esrKuzq6Supayxv_zw_O3R_On06ej5-L-nrqSzpKytra2q4A%3D%3D&rom_version=emotionui_4.1.2_vns-al00c00b203&plugin=26958&ts=1555483566&as=a2955c0b6e5a8c8b862222&mas=0024033401fb3ffe67d46649e3d24d01b38f70a5828080803d&cp=55c9b361c9baeq1'
+        yield scrapy.Request(tuijian_tul, headers=headers, callback=self.parse)
+        # 军事
+        junshi_tul = 'https://is.snssdk.com/api/news/feed/v88/?list_count=0&support_rn=4&category=news_military&concern_id=6215497895454444033&refer=1&refresh_reason=5&session_refresh_idx=1&count=20&last_refresh_sub_entrance_interval=1556802214&loc_mode=7&loc_time=1556801760&latitude=36.86022937428092&longitude=114.51879219059971&city=%E9%82%A2%E5%8F%B0%E5%B8%82&tt_from=enter_auto&lac=45461&cid=35337315&plugin_enable=3&app_extra_params=%7B%22playparam%22%3A%22codec_type%3A1%22%7D&sati_extra_params=%7B%22last_click_item_list%22%3A%5B%5D%7D&iid=71076089961&device_id=67279979471&ac=wifi&channel=huawei&aid=13&app_name=news_article&version_code=723&version_name=7.2.3&device_platform=android&ab_version=607361%2C862823%2C739390%2C764921%2C662099%2C812271%2C717952%2C867977%2C668774%2C766806%2C864175%2C855440%2C721869%2C775311%2C765197%2C808169%2C612374%2C549647%2C615291%2C821965%2C546700%2C798354%2C757284%2C757488%2C798159%2C853743%2C679100%2C735201%2C862818%2C767991%2C861913%2C779958%2C660830%2C856474%2C854822%2C830856%2C859672%2C754087%2C770570%2C859430%2C662176%2C862638%2C475405%2C665175%2C674056%2C770489%2C170988%2C643890%2C398175%2C374117%2C671753%2C674788%2C550042%2C435215%2C649429%2C677128%2C522765%2C416055%2C710077%2C801968%2C707372%2C603441%2C789246%2C800208%2C783645%2C603387%2C603399%2C603404%2C603406%2C866773%2C833900%2C844799%2C661907%2C863809%2C668775%2C832706%2C848659%2C737593%2C802345%2C788012%2C795195%2C792681%2C856824%2C759653%2C804857%2C661781%2C457481%2C649403%2C815116&ab_group=100167%2C94564%2C102749%2C181430&ab_feature=102749%2C94564&ssmix=a&device_type=HUAWEI+VNS-AL00&device_brand=HUAWEI&language=zh&os_api=23&os_version=6.0&uuid=869315025703184&openudid=292204f62c6e8c86&manifest_version_code=723&resolution=1080*1812&dpi=480&update_version_code=72312&_rticket=1556802214868&fp=PSTrcrTZPMFbFlcOJlU1FzmILr4q&tma_jssdk_version=1.16.1.3&pos=5r_-9Onkv6e_dB8_eBIteCUfv7G_8fLz-vTp6Pn4v6esrKmzqKylqqSvrKStqKSkqqyxv_H86fTp6Pn4v6euq7Olq62vr6Suqqmvpa2kr7G__PD87d706eS_p790Hz94Ei14JR-_sb_88Pzt0fLz-vTp6Pn4v6esrKmzqKyvrK6vsb_88Pzt0fzp9Ono-fi_p66rs6WoqayurOA%3D&rom_version=emotionui_4.1.2_vns-al00c00b203&plugin=26958&ts=1556802214&as=a2753edc866a5cfada2844&mas=00f7278ddda123f288dc7f25fbdcb561d3e846ec2cd0e5e6dd&cp=5bcbcaaee5aa6q1'
+        yield scrapy.Request(junshi_tul, headers=headers, callback=self.parse)
+        # 科技
+        keji_url = 'https://is.snssdk.com/api/news/feed/v88/?list_count=19&support_rn=4&category=news_tech&concern_id=6215497899594222081&refer=1&refresh_reason=4&session_refresh_idx=2&count=20&min_behot_time=1556803414&last_refresh_sub_entrance_interval=1556803726&loc_mode=7&loc_time=1556803265&latitude=36.86017495783816&longitude=114.51877005147763&city=%E9%82%A2%E5%8F%B0%E5%B8%82&tt_from=click&lac=45461&cid=35347405&plugin_enable=3&app_extra_params=%7B%22playparam%22%3A%22codec_type%3A1%22%7D&sati_extra_params=%7B%22last_click_item_list%22%3A%5B%5D%7D&iid=71076089961&device_id=67279979471&ac=wifi&channel=huawei&aid=13&app_name=news_article&version_code=723&version_name=7.2.3&device_platform=android&ab_version=721869%2C775311%2C765197%2C808169%2C612374%2C549647%2C615291%2C821965%2C546700%2C798354%2C757284%2C757488%2C798159%2C853743%2C679100%2C735201%2C862818%2C767991%2C861913%2C779958%2C660830%2C856474%2C854822%2C830856%2C859672%2C754087%2C770570%2C859430%2C662176%2C862638%2C475405%2C665175%2C674056%2C770489%2C170988%2C643890%2C398175%2C374117%2C671753%2C674788%2C550042%2C435215%2C649429%2C677128%2C522765%2C416055%2C710077%2C801968%2C707372%2C603441%2C789246%2C800208%2C783645%2C603387%2C603399%2C603404%2C603406%2C866773%2C833900%2C844799%2C661907%2C863809%2C668775%2C832706%2C848659%2C737593%2C802345%2C788012%2C795195%2C792681%2C856824%2C607361%2C862823%2C739390%2C764921%2C662099%2C812271%2C717952%2C867977%2C668774%2C766806%2C864175%2C855440%2C759653%2C804857%2C661781%2C457481%2C649403%2C815116&ab_group=100167%2C94564%2C102749%2C181430&ab_feature=102749%2C94564&ssmix=a&device_type=HUAWEI+VNS-AL00&device_brand=HUAWEI&language=zh&os_api=23&os_version=6.0&uuid=869315025703184&openudid=292204f62c6e8c86&manifest_version_code=723&resolution=1080*1812&dpi=480&update_version_code=72312&_rticket=1556803727001&fp=PSTrcrTZPMFbFlcOJlU1FzmILr4q&tma_jssdk_version=1.16.1.3&pos=5r_-9Onkv6e_dB8_eBIteCUfv7G_8fLz-vTp6Pn4v6esrKmzqKylqqqtraisqaqqq66xv_H86fTp6Pn4v6euq7Olq62sqqmkqKqlrqWsq7G__PD87d706eS_p790Hz94Ei14JR-_sb_88Pzt0fLz-vTp6Pn4v6esrKmzqKyvqaixv_zw_O3R_On06ej5-L-nrquzpaipr6-o4A%3D%3D&rom_version=emotionui_4.1.2_vns-al00c00b203&plugin=26958&ts=1556803726&as=a2053fecce88fc905a2477&mas=008711c5b8e5ae9ec34f4ff50aa5fb4354cd64442ce0262a75&cp=5bcdcbaafb08eq1'
+        yield scrapy.Request(keji_url, headers=headers, callback=self.parse)
+        # 国际
+        guoji_url = 'https://is.snssdk.com/api/news/feed/v88/?list_count=9&support_rn=4&category=news_world&concern_id=6215497896255556098&refer=1&refresh_reason=4&session_refresh_idx=1&count=20&min_behot_time=1556803067&last_refresh_sub_entrance_interval=1556803295&loc_mode=7&loc_time=1556803265&latitude=36.86017495783816&longitude=114.51877005147763&city=%E9%82%A2%E5%8F%B0%E5%B8%82&tt_from=click&lac=45461&cid=35347405&plugin_enable=3&app_extra_params=%7B%22playparam%22%3A%22codec_type%3A1%22%7D&sati_extra_params=%7B%22last_click_item_list%22%3A%5B%5D%7D&iid=71076089961&device_id=67279979471&ac=wifi&channel=huawei&aid=13&app_name=news_article&version_code=723&version_name=7.2.3&device_platform=android&ab_version=721869%2C775311%2C765197%2C808169%2C612374%2C549647%2C615291%2C821965%2C546700%2C798354%2C757284%2C757488%2C798159%2C853743%2C679100%2C735201%2C862818%2C767991%2C861913%2C779958%2C660830%2C856474%2C854822%2C830856%2C859672%2C754087%2C770570%2C859430%2C662176%2C862638%2C475405%2C665175%2C674056%2C770489%2C170988%2C643890%2C398175%2C374117%2C671753%2C674788%2C550042%2C435215%2C649429%2C677128%2C522765%2C416055%2C710077%2C801968%2C707372%2C603441%2C789246%2C800208%2C783645%2C603387%2C603399%2C603404%2C603406%2C866773%2C833900%2C844799%2C661907%2C863809%2C668775%2C832706%2C848659%2C737593%2C802345%2C788012%2C795195%2C792681%2C856824%2C607361%2C862823%2C739390%2C764921%2C662099%2C812271%2C717952%2C867977%2C668774%2C766806%2C864175%2C855440%2C759653%2C804857%2C661781%2C457481%2C649403%2C815116&ab_group=100167%2C94564%2C102749%2C181430&ab_feature=102749%2C94564&ssmix=a&device_type=HUAWEI+VNS-AL00&device_brand=HUAWEI&language=zh&os_api=23&os_version=6.0&uuid=869315025703184&openudid=292204f62c6e8c86&manifest_version_code=723&resolution=1080*1812&dpi=480&update_version_code=72312&_rticket=1556803295205&fp=PSTrcrTZPMFbFlcOJlU1FzmILr4q&tma_jssdk_version=1.16.1.3&pos=5r_-9Onkv6e_dB8_eBIteCUfv7G_8fLz-vTp6Pn4v6esrKmzqKylqqqtraisqaqqq66xv_H86fTp6Pn4v6euq7Olq62sqqmkqKqlrqWsq7G__PD87d706eS_p790Hz94Ei14JR-_sb_88Pzt0fLz-vTp6Pn4v6esrKmzqKyvqaixv_zw_O3R_On06ej5-L-nrquzpaipr6-o4A%3D%3D&rom_version=emotionui_4.1.2_vns-al00c00b203&plugin=26958&ts=1556803295&as=a2e5becc5fad9cde4a2477&mas=009bcc4a5c667e7ac03a1f7857900c79fccc4e4c2ce0262af5&cp=53c5c1aae4edfq1'
+        yield scrapy.Request(guoji_url, headers=headers, callback=self.parse)
+        # 读取excel表中的头条账号,并循环发送主页请求
+        df = pd.read_excel('Scrapypro/spiders/toutiao_zhanghao.xlsx')
+        for uid in df['uid']:
+            homepage_url = 'https://is.snssdk.com/api/feed/profile/v1/?category=profile_all&visited_uid=%s&count=20&offset=0&ac=wifi&channel=huawei&app_name=news_article&version_code=723&version_name=7.2.3&device_platform=android&device_type=HUAWEI+VNS-AL00&language=zh&os_version=6.0' % uid
+            # print(homepage_url)
+            yield scrapy.Request(homepage_url, headers=headers, callback=self.parse)
+
+    def parse(self, response):
+        print(response.status)
+        response_json = json.loads(response.text)
+        data = response_json['data']
+        for obj in data:
+            obj_content = obj['content']
+            obj_content_json = json.loads(obj_content)
+            # print(obj_content_json)
+            cell_type = obj_content_json['cell_type']
+            # print(cell_type)
+            if cell_type == 0:
+                id = str(obj_content_json.get('id'))
+                abstract = obj_content_json.get('abstract')
+                title = obj_content_json.get('title')
+                source = obj_content_json.get('source')
+                comment_count = obj_content_json.get('comment_count')
+                read_count = obj_content_json.get('read_count')
+                repin_count = obj_content_json.get('repin_count')
+                share_count = obj_content_json.get('share_count')
+                digg_count = obj_content_json.get('digg_count')
+                publish_time = obj_content_json.get('publish_time')
+                pubtime = string_utils.get_timeStamp_to_dateTime(publish_time)
+                meta = {
+                    'cell_type': cell_type,
+                    'id': id,
+                    'abstract': abstract,
+                    'title': title,
+                    'source': source,
+                    'comment_count': comment_count,
+                    'read_count': read_count,
+                    'repin_count': repin_count,
+                    'share_count': share_count,
+                    'digg_count': digg_count,
+                    'pubtime': pubtime,
+                        }
+                if string_utils.compare_time(pubtime[:10], self.days) and id:
+                    content_url = 'http://a.pstatp.com/article/content/22/1/%s/%s/1/' % (id, id)
+                    headers = {
+                        "host": "a6.pstatp.com",
+                        "connection": "keep-alive",
+                        "accept-encoding": "gzip",
+                        "user-agent": "com.ss.android.article.news/721 (linuX; U; android 6.0; ZH_CN; HUAWEI VNS-AL00; buiLD/HUAWEIVNS-AL00; cronet/58.0.2991.0)",
+                        "X-gorgon": "03ed288080001c90bd241bd9a0fdfe183af7427f326bda27c28a",
+                        "X-khronos": "1555506940",
+                        "X-pods": "",
+                    }
+                    yield scrapy.Request(content_url, headers=headers, callback=self.detail_parse, meta=meta)
+            elif cell_type == 32:
+                # print(response.text)
+                id = str(obj_content_json.get('thread_id'))
+                abstract = obj_content_json.get('abstract')
+                content = obj_content_json.get('content')
+                title = obj_content_json['user']['name']
+                source = obj_content_json.get('source')
+                comment_count = obj_content_json.get('comment_count')
+                read_count = obj_content_json.get('read_count')
+                repin_count = obj_content_json.get('repin_count')
+                share_count = obj_content_json.get('share_count')
+                digg_count = obj_content_json.get('digg_count')
+                publish_time = obj_content_json.get('create_time')
+                pubtime = string_utils.get_timeStamp_to_dateTime(publish_time)
+                meta = {
+                    'cell_type': cell_type,
+                    'id': id,
+                    'abstract': abstract,
+                    'content': content,
+                    'title': title,
+                    'source': source,
+                    'comment_count': comment_count,
+                    'read_count': read_count,
+                    'repin_count': repin_count,
+                    'share_count': share_count,
+                    'digg_count': digg_count,
+                    'pubtime': pubtime,
+                }
+                if string_utils.compare_time(pubtime[:10], self.days):
+                    # print(meta)
+                    comment_url = 'https://is.snssdk.com/article/v4/tab_comments/?group_id=%s' % id
+                    headers = {
+                        "host": "is.snssdk.com",
+                        # "connection": "keep-alive",
+                        "cookie": "odin_tt=69337547584d633644575059767a6457e1b496b6126c8ca8525dd4c9578ffaec30fdfafb7d6e608b95b3c5c7c17130262eba28d2450ad7242328f28579a70809; install_id=69437426592; ttreq=1$f43f64ce24ac391a835c27eeb3c80c9b4e61b325; qh[360]=1",
+                        # "accept-encoding": "gzip",
+                        "X-SS-REQ-TICKET": "1555512065547",
+                        "sdk-version": "1",
+                        "user-agent": "com.ss.android.article.news/721 (linuX; U; android 6.0; ZH_CN; HUAWEI VNS-AL00; buiLD/HUAWEIVNS-AL00; cronet/58.0.2991.0)",
+                        "X-gorgon": "038cb0b6800042a4de9b282d437151a1dc8d9daa11ecd906291a",
+                        "X-khronos": "1555512065",
+                        "X-pods": "",
+                    }
+                    yield scrapy.Request(comment_url, headers=headers, callback=self.comment_parse, meta=meta)
+            else:
+                print('----cell_type=', cell_type, '暂不解析----')  # 202回答，56转发
+                print(response.url)
+                print(obj_content_json)
+                print(response.text)
+
+    def detail_parse(self, response):
+        response_json = json.loads(response.text)
+        content_str = response_json['data']['content']
+        content_html = Selector(text=content_str)
+        content_list = content_html.xpath('//article//p/text()').extract()
+        if content_list:
+            content = "".join(content_list).strip()
+        else:
+            content = None
+        meta = response.meta
+        meta['content'] = content
+        comment_url = 'https://is.snssdk.com/article/v4/tab_comments/?group_id=%s' % meta['id']
+        print(comment_url)
+        headers = {
+            "host": "is.snssdk.com",
+            # "connection": "keep-alive",
+            "cookie": "odin_tt=69337547584d633644575059767a6457e1b496b6126c8ca8525dd4c9578ffaec30fdfafb7d6e608b95b3c5c7c17130262eba28d2450ad7242328f28579a70809; install_id=69437426592; ttreq=1$f43f64ce24ac391a835c27eeb3c80c9b4e61b325; qh[360]=1",
+            # "accept-encoding": "gzip",
+            "X-SS-REQ-TICKET": "1555512065547",
+            "sdk-version": "1",
+            "user-agent": "com.ss.android.article.news/721 (linuX; U; android 6.0; ZH_CN; HUAWEI VNS-AL00; buiLD/HUAWEIVNS-AL00; cronet/58.0.2991.0)",
+            "X-gorgon": "038cb0b6800042a4de9b282d437151a1dc8d9daa11ecd906291a",
+            "X-khronos": "1555512065",
+            "X-pods": "",
+        }
+        yield scrapy.Request(comment_url, headers=headers, callback=self.comment_parse, meta=meta)
+
+    def comment_parse(self, response):
+        print(response.status)
+        response_json = json.loads(response.text)
+        comment_data = response_json['data']
+        meta = response.meta
+        print(meta)
+        item = AppNewsItem()
+        item['id'] = meta['id']
+        item['app_type'] = meta['cell_type']
+        item['url'] = 'https://www.toutiao.com/a' + meta['id']
+        item['title'] = meta['title']
+        item['pubtime'] = meta['pubtime']
+        item['source'] = meta['source']
+        item['brief'] = meta['abstract']
+        item['content'] = meta['content']
+        item['share_count'] = meta['share_count']
+        item['digg_count'] = meta['digg_count']
+        item['repin_count'] = meta['repin_count']
+        item['read_count'] = meta['read_count']
+        item['comment_json'] = comment_data
+        item['comment_count'] = meta['comment_count']
+        item['crawl_time'] = int(time.time())
+        yield item
